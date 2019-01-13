@@ -21,53 +21,99 @@ type API =
     "PurchaseOrders" :> (
       Get '[JSON] [Entity PurchaseOrder] :<|>
       ReqBody '[JSON] PurchaseOrder :> Post '[JSON] PurchaseOrderId :<|>
-      Capture "id" PurchaseOrderId :> (
+      Capture "poid" PurchaseOrderId :> (
         Get '[JSON] (Entity PurchaseOrder) :<|>
         ReqBody '[JSON] PurchaseOrder :> PutNoContent '[JSON] () :<|>
         "Items" :> (
           Get '[JSON] [Entity PurchaseOrderItem] :<|>
-          ReqBody '[JSON] PurchaseOrderItem :> Post '[JSON] (Entity PurchaseOrderItem)
+          ReqBody '[JSON] PurchaseOrderItem :> Post '[JSON] PurchaseOrderItemId :<|>
+          Capture "poiid" PurchaseOrderItemId :> (
+            Get '[JSON] (Entity PurchaseOrderItem) :<|>
+            ReqBody '[JSON] PurchaseOrderItem :> PutNoContent '[JSON] () :<|>
+            "Locations" :> (
+              Get '[JSON] [Entity PurchaseOrderItemLocation]
+            )
+          )
         )
       )
+    ) :<|>
+    "Products" :> (
+      Get '[JSON] [Entity Product]
     )
   )
 
 server :: Server API
 server =
-  purchaseOrders
+  purchaseOrders :<|>
+  products
   where
     purchaseOrders =
       getPurchaseOrders :<|>
       postPurchaseOrder :<|>
-      purchaseOrder
+      withPurchaseOrder
       where
-        getPurchaseOrders =
-          liftIO . runDb $ Db.selectPurchaseOrders
-
-        postPurchaseOrder po =
-          liftIO . runDb $ Db.addPurchaseOrder po
-
-        purchaseOrder poid =
-          getPurchaseOrder :<|>
-          putPurchaseOrder :<|>
+        withPurchaseOrder poid =
+          getPurchaseOrder poid :<|>
+          putPurchaseOrder poid :<|>
           purchaseOrderItems
           where
-            getPurchaseOrder =
-              liftIO . runDb $ Db.getPurchaseOrder poid
-
-            putPurchaseOrder po =
-              liftIO . runDb $ do
-                Db.updatePurchaseOrder poid po
-
             purchaseOrderItems =
-              getPurchaseOrderItems :<|>
-              postPurchaseOrderItem
+              getPurchaseOrderItems poid :<|>
+              postPurchaseOrderItem poid :<|>
+              withPurchaseOrderItem
               where
-                getPurchaseOrderItems =
-                  liftIO . runDb $ Db.selectPurchaseOrderItems poid
+                withPurchaseOrderItem poiid =
+                  getPurchaseOrderItem poiid :<|>
+                  putPurchaseOrderItem poiid :<|>
+                  purchaseOrderItemLocations
+                  where
+                    purchaseOrderItemLocations =
+                      getPurchaseOrderItemLocations poiid
+    products =
+      getProducts
 
-                postPurchaseOrderItem poi =
-                  liftIO . runDb $ Db.addPurchaseOrderItem poid poi
+
+getPurchaseOrders :: Handler [Entity PurchaseOrder]
+getPurchaseOrders =
+  liftIO . runDb $ selectPurchaseOrders
+
+getPurchaseOrder :: PurchaseOrderId -> Handler (Entity PurchaseOrder)
+getPurchaseOrder =
+  liftIO . runDb . findPurchaseOrder
+
+postPurchaseOrder :: PurchaseOrder -> Handler PurchaseOrderId
+postPurchaseOrder =
+  liftIO . runDb . addPurchaseOrder
+
+putPurchaseOrder :: PurchaseOrderId -> PurchaseOrder -> Handler ()
+putPurchaseOrder poid =
+  liftIO . runDb . updatePurchaseOrder poid
+
+
+getPurchaseOrderItems :: PurchaseOrderId -> Handler [Entity PurchaseOrderItem]
+getPurchaseOrderItems =
+  liftIO . runDb . selectPurchaseOrderItems
+
+getPurchaseOrderItem :: PurchaseOrderItemId -> Handler (Entity PurchaseOrderItem)
+getPurchaseOrderItem =
+  liftIO . runDb . findPurchaseOrderItem
+
+postPurchaseOrderItem :: PurchaseOrderId -> PurchaseOrderItem -> Handler PurchaseOrderItemId
+postPurchaseOrderItem poid =
+  liftIO . runDb . addPurchaseOrderItem poid
+
+putPurchaseOrderItem :: PurchaseOrderItemId -> PurchaseOrderItem -> Handler ()
+putPurchaseOrderItem poiid =
+  liftIO . runDb . updatePurchaseOrderItem poiid
+
+getPurchaseOrderItemLocations :: PurchaseOrderItemId -> Handler [Entity PurchaseOrderItemLocation]
+getPurchaseOrderItemLocations =
+  liftIO . runDb . selectPurchaseOrderItemLocations
+
+
+getProducts :: Handler [Entity Product]
+getProducts =
+  liftIO . runDb $ Db.selectProducts
 
 
 api :: Proxy API
