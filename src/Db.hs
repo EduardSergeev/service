@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE EmptyDataDecls             #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -11,11 +12,16 @@
 
 module Db where
 
-import Control.Monad.IO.Class  (MonadIO, liftIO)
-import Control.Monad.Reader (MonadReader(..), runReaderT)
-import Database.Persist
-import Database.Persist.Postgresql
-import Database.Persist.TH
+import           Control.Monad.IO.Class  (MonadIO, liftIO)
+import           Control.Monad.Reader (MonadReader(..), runReaderT)
+import           Data.Aeson
+import qualified Data.HashMap.Strict as HM
+import           Data.List (groupBy)
+import qualified Database.Esqueleto as E
+import           Database.Persist
+import           Database.Persist.Postgresql
+import           Database.Persist.TH
+import           GHC.Generics (Generic)
 
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
@@ -43,6 +49,17 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
     deriving Show
 |]
 
+data PurchaseOrderNav = PurchaseOrderNav {
+    purchaseOrder :: Entity PurchaseOrder
+  , purchaseOrderItems :: [Entity PurchaseOrderItem]
+  } deriving Generic
+
+instance ToJSON PurchaseOrderNav where
+  toJSON (PurchaseOrderNav po pois) =
+    case toJSON po of
+      Object o -> Object $ HM.insert "items" (toJSON pois) o
+      x -> x
+
 type Db = SqlPersistT IO 
 
 
@@ -65,8 +82,30 @@ selectPurchaseOrders :: Db [Entity PurchaseOrder]
 selectPurchaseOrders =
   selectList [] []
 
+selectPurchaseOrdersAndItems :: Db [PurchaseOrderNav]
+selectPurchaseOrdersAndItems = do
+  pos <- E.select $
+    E.from $ \po -> do
+    E.orderBy [E.asc (po E.^. PurchaseOrderId)]
+    return po
+  pois <- E.select $
+    E.from $ \(po, poi) -> do
+    E.where_ (poi E.^. PurchaseOrderItemPurchaseOrderId E.==. po E.^. PurchaseOrderId)
+    E.orderBy [E.asc (poi E.^. PurchaseOrderItemPurchaseOrderId)]
+    return poi
+  return (merge pos . groupBy (\a b -> byId a == byId b) $ pois)
+  where
+    byId = purchaseOrderItemPurchaseOrderId . entityVal
+    merge pos [] =
+      fmap (`PurchaseOrderNav` []) pos 
+    merge (po:pos') poiss@(pois@(poi:_):poiss')
+      | entityKey po == byId poi =
+          PurchaseOrderNav po pois : merge pos' poiss'
+      | otherwise =
+          PurchaseOrderNav po [] : merge pos' poiss
+
 findPurchaseOrder :: PurchaseOrderId -> Db (Maybe (Entity PurchaseOrder))
-findPurchaseOrder poid = do
+findPurchaseOrder poid =
   getEntity poid
 
 addPurchaseOrder :: PurchaseOrder -> Db PurchaseOrderId

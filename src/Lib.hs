@@ -25,6 +25,7 @@ type API =
   "api" :> (
     "PurchaseOrders" :> (
       Get '[JSON] [Entity PurchaseOrder] :<|>
+      "Items" :> Get '[JSON] [PurchaseOrderNav] :<|>
       ReqBody '[JSON] PurchaseOrder :> Post '[JSON] PurchaseOrderId :<|>
       Capture "poid" PurchaseOrderId :> (
         Get '[JSON] (Entity PurchaseOrder) :<|>
@@ -54,6 +55,7 @@ serverT =
   where
     purchaseOrders =
       getPurchaseOrders :<|>
+      getPurchaseOrdersAndItems :<|>
       postPurchaseOrder :<|>
       withPurchaseOrder
       where
@@ -81,6 +83,10 @@ serverT =
 getPurchaseOrders :: App [Entity PurchaseOrder]
 getPurchaseOrders =
   runDb $ selectPurchaseOrders
+
+getPurchaseOrdersAndItems :: App [PurchaseOrderNav]
+getPurchaseOrdersAndItems =
+  runDb $ selectPurchaseOrdersAndItems
 
 getPurchaseOrder :: PurchaseOrderId -> App (Entity PurchaseOrder)
 getPurchaseOrder =

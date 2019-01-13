@@ -26,8 +26,10 @@ library
                     , persistent
                     , persistent-postgresql
                     , persistent-template
+                    , esqueleto
                     , monad-logger
                     , mtl
+                    , unordered-containers
   ghc-options:        -Wall
   default-language:   Haskell2010
 
