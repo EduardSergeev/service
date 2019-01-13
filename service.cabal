@@ -1,0 +1,56 @@
+name:                service
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/EduardSergeev/service#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Eduard Sergeev
+maintainer:          eduard.sergeev@gmail.com
+copyright:           2019 Eduard Sergeev
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:     src
+  exposed-modules:    Lib
+                      Db
+
+  build-depends:      base >= 4.7 && < 5
+                    , aeson
+                    , servant-server
+                    , wai
+                    , warp
+                    , persistent
+                    , persistent-postgresql
+                    , persistent-template
+                    , monad-logger
+  ghc-options:        -Wall
+  default-language:   Haskell2010
+
+executable service-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , service
+  default-language:    Haskell2010
+
+-- test-suite service-test
+--   type:                exitcode-stdio-1.0
+--   hs-source-dirs:      test
+--   main-is:             Spec.hs
+--   build-depends:       base
+--                      , service
+--                      , hspec
+--                      , hspec-wai
+--                      , hspec-wai-json
+--                      , aeson
+--   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+--   default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/githubuser/service
