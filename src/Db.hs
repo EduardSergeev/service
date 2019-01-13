@@ -11,8 +11,8 @@
 
 module Db where
 
-import Control.Monad.IO.Class  (liftIO)
-import Control.Monad.Logger    (runStderrLoggingT)
+import Control.Monad.IO.Class  (MonadIO, liftIO)
+import Control.Monad.Reader (MonadReader(..), runReaderT)
 import Database.Persist
 import Database.Persist.Postgresql
 import Database.Persist.TH
@@ -43,61 +43,63 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
     deriving Show
 |]
 
+type Db = SqlPersistT IO 
+
 
 connStr :: ConnectionString
 connStr = "host=localhost dbname=orders user=postgres port=5432"
 
-ensureDb :: IO ()
-ensureDb =
-  runDb $ runMigration migrateAll
 
-runDb :: SqlPersistT IO b -> IO b
-runDb query =
-  runStderrLoggingT $ withPostgresqlPool connStr 10 $ \pool -> liftIO $
-    flip runSqlPool pool $ query
+ensureDb :: ConnectionPool -> IO ()
+ensureDb pool =
+  flip runReaderT pool $ runDb $ runMigration migrateAll
 
 
-selectPurchaseOrders :: SqlPersistT IO [Entity PurchaseOrder]
+runDb :: (MonadReader ConnectionPool m, MonadIO m) => Db b -> m b
+runDb query = do
+    pool <- ask
+    liftIO $ runSqlPool query pool
+
+
+selectPurchaseOrders :: Db [Entity PurchaseOrder]
 selectPurchaseOrders =
   selectList [] []
 
-findPurchaseOrder :: PurchaseOrderId -> SqlPersistT IO (Entity PurchaseOrder)
+findPurchaseOrder :: PurchaseOrderId -> Db (Maybe (Entity PurchaseOrder))
 findPurchaseOrder poid = do
-  [po] <- selectList [PurchaseOrderId ==. poid] [LimitTo 1]
-  return po
+  getEntity poid
 
-addPurchaseOrder :: PurchaseOrder -> SqlPersistT IO PurchaseOrderId
+addPurchaseOrder :: PurchaseOrder -> Db PurchaseOrderId
 addPurchaseOrder po =
   insert $ po
 
-updatePurchaseOrder :: PurchaseOrderId -> PurchaseOrder -> SqlPersistT IO ()
+updatePurchaseOrder :: PurchaseOrderId -> PurchaseOrder -> Db ()
 updatePurchaseOrder poid po =
   replace poid po
 
 
-selectPurchaseOrderItems :: PurchaseOrderId -> SqlPersistT IO [Entity PurchaseOrderItem]
+selectPurchaseOrderItems :: PurchaseOrderId -> Db [Entity PurchaseOrderItem]
 selectPurchaseOrderItems poid =
   selectList [PurchaseOrderItemPurchaseOrderId ==. poid] []
 
-findPurchaseOrderItem :: PurchaseOrderItemId -> SqlPersistT IO (Entity PurchaseOrderItem)
-findPurchaseOrderItem poid = do
-  [poi] <- selectList [PurchaseOrderItemId ==. poid] [LimitTo 1]
-  return poi
+findPurchaseOrderItem :: PurchaseOrderItemId -> Db (Maybe(Entity PurchaseOrderItem))
+findPurchaseOrderItem poid =
+  getEntity poid
 
-addPurchaseOrderItem :: PurchaseOrderId -> PurchaseOrderItem -> SqlPersistT IO PurchaseOrderItemId
+addPurchaseOrderItem :: PurchaseOrderId -> PurchaseOrderItem -> Db PurchaseOrderItemId
 addPurchaseOrderItem poid poi = do
   insert $ poi { purchaseOrderItemPurchaseOrderId = poid }
 
-updatePurchaseOrderItem :: PurchaseOrderItemId -> PurchaseOrderItem -> SqlPersistT IO ()
+updatePurchaseOrderItem :: PurchaseOrderItemId -> PurchaseOrderItem -> Db ()
 updatePurchaseOrderItem poiid poi =
   replace poiid poi
 
 
-selectPurchaseOrderItemLocations :: PurchaseOrderItemId -> SqlPersistT IO [Entity PurchaseOrderItemLocation]
+selectPurchaseOrderItemLocations :: PurchaseOrderItemId -> Db [Entity PurchaseOrderItemLocation]
 selectPurchaseOrderItemLocations poiid =
   selectList [PurchaseOrderItemLocationPurchaseOrderItemId ==. poiid] []
 
 
-selectProducts :: SqlPersistT IO [Entity Product]
+selectProducts :: Db [Entity Product]
 selectProducts =
   selectList [] []

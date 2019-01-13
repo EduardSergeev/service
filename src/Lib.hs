@@ -3,18 +3,23 @@
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TypeOperators     #-}
 
-module Lib
-    ( startApp
-    , app
-    ) where
+module Lib (
+    startApp,
+    app
+  ) where
 
+
+import Control.Monad ((<=<))
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Logger (runStderrLoggingT)
+import Control.Monad.Reader (ReaderT(..))
+import Database.Persist.Postgresql (ConnectionPool, withPostgresqlPool)
 import Database.Persist.Types (Entity)
 import Db
-import Network.Wai
-import Network.Wai.Handler.Warp
+import Network.Wai.Handler.Warp (run)
 import Servant
 
+type App = ReaderT ConnectionPool Handler
 
 type API =
   "api" :> (
@@ -42,8 +47,8 @@ type API =
     )
   )
 
-server :: Server API
-server =
+serverT :: ServerT API App
+serverT =
   purchaseOrders :<|>
   products
   where
@@ -73,54 +78,60 @@ server =
       getProducts
 
 
-getPurchaseOrders :: Handler [Entity PurchaseOrder]
+getPurchaseOrders :: App [Entity PurchaseOrder]
 getPurchaseOrders =
-  liftIO . runDb $ selectPurchaseOrders
+  runDb $ selectPurchaseOrders
 
-getPurchaseOrder :: PurchaseOrderId -> Handler (Entity PurchaseOrder)
+getPurchaseOrder :: PurchaseOrderId -> App (Entity PurchaseOrder)
 getPurchaseOrder =
-  liftIO . runDb . findPurchaseOrder
+  throwError err404 `maybe` return <=< runDb . findPurchaseOrder
 
-postPurchaseOrder :: PurchaseOrder -> Handler PurchaseOrderId
+postPurchaseOrder :: PurchaseOrder -> App PurchaseOrderId
 postPurchaseOrder =
-  liftIO . runDb . addPurchaseOrder
+  runDb . addPurchaseOrder
 
-putPurchaseOrder :: PurchaseOrderId -> PurchaseOrder -> Handler ()
+putPurchaseOrder :: PurchaseOrderId -> PurchaseOrder -> App ()
 putPurchaseOrder poid =
-  liftIO . runDb . updatePurchaseOrder poid
+  runDb . updatePurchaseOrder poid
 
 
-getPurchaseOrderItems :: PurchaseOrderId -> Handler [Entity PurchaseOrderItem]
+getPurchaseOrderItems :: PurchaseOrderId -> App [Entity PurchaseOrderItem]
 getPurchaseOrderItems =
-  liftIO . runDb . selectPurchaseOrderItems
+  runDb . selectPurchaseOrderItems
 
-getPurchaseOrderItem :: PurchaseOrderItemId -> Handler (Entity PurchaseOrderItem)
+getPurchaseOrderItem :: PurchaseOrderItemId -> App (Entity PurchaseOrderItem)
 getPurchaseOrderItem =
-  liftIO . runDb . findPurchaseOrderItem
+  throwError err404 `maybe` return <=< runDb . findPurchaseOrderItem
 
-postPurchaseOrderItem :: PurchaseOrderId -> PurchaseOrderItem -> Handler PurchaseOrderItemId
+postPurchaseOrderItem :: PurchaseOrderId -> PurchaseOrderItem -> App PurchaseOrderItemId
 postPurchaseOrderItem poid =
-  liftIO . runDb . addPurchaseOrderItem poid
+  runDb . addPurchaseOrderItem poid
 
-putPurchaseOrderItem :: PurchaseOrderItemId -> PurchaseOrderItem -> Handler ()
+putPurchaseOrderItem :: PurchaseOrderItemId -> PurchaseOrderItem -> App ()
 putPurchaseOrderItem poiid =
-  liftIO . runDb . updatePurchaseOrderItem poiid
+  runDb . updatePurchaseOrderItem poiid
 
-getPurchaseOrderItemLocations :: PurchaseOrderItemId -> Handler [Entity PurchaseOrderItemLocation]
+getPurchaseOrderItemLocations :: PurchaseOrderItemId -> App [Entity PurchaseOrderItemLocation]
 getPurchaseOrderItemLocations =
-  liftIO . runDb . selectPurchaseOrderItemLocations
+  runDb . selectPurchaseOrderItemLocations
 
 
-getProducts :: Handler [Entity Product]
+getProducts :: App [Entity Product]
 getProducts =
-  liftIO . runDb $ Db.selectProducts
+  runDb $ Db.selectProducts
 
 
 api :: Proxy API
 api = Proxy
 
-app :: Application
-app = serve api server
+server :: ConnectionPool -> Server API
+server pool = hoistServer api (flip runReaderT pool) serverT
+
+app :: ConnectionPool -> Application
+app pool = serve api $ server pool
 
 startApp :: IO ()
-startApp = run 8080 app
+startApp =
+  runStderrLoggingT $ withPostgresqlPool connStr 10 $ \pool -> liftIO $ do
+    ensureDb pool
+    run 8080 $ app pool

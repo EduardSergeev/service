@@ -27,6 +27,7 @@ library
                     , persistent-postgresql
                     , persistent-template
                     , monad-logger
+                    , mtl
   ghc-options:        -Wall
   default-language:   Haskell2010
 
