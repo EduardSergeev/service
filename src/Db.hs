@@ -103,6 +103,7 @@ selectPurchaseOrdersAndItems = do
           PurchaseOrderNav po pois : merge pos' poiss'
       | otherwise =
           PurchaseOrderNav po [] : merge pos' poiss
+    merge _ _ = error "DB corrupted"
 
 findPurchaseOrder :: PurchaseOrderId -> Db (Maybe (Entity PurchaseOrder))
 findPurchaseOrder poid =

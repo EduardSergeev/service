@@ -23,41 +23,54 @@ type App = ReaderT ConnectionPool Handler
 
 type ServerApp api = ServerT api App
 
+
 type API =
-  "api" :> PurchaseOrderAPI :<|> ProductAPI
+  "api" :>
+    PurchaseOrderAPI :<|>
+    ProductAPI
 
 type PurchaseOrderAPI = 
   "PurchaseOrders" :>
-    Get '[JSON] [Entity PurchaseOrder] :<|>
-    "Items" :> Get '[JSON] [PurchaseOrderNav] :<|>
-    ReqBody '[JSON] PurchaseOrder :> Post '[JSON] PurchaseOrderId :<|>
-    Capture "poid" PurchaseOrderId :> (
-      Get '[JSON] (Entity PurchaseOrder) :<|>
-      ReqBody '[JSON] PurchaseOrder :> PutNoContent '[JSON] () :<|>
-      PurchaseOrdeItemAPI
-    )
+    CRUD "poid" PurchaseOrder PurchaseOrdeItemAPI
   
 type PurchaseOrdeItemAPI =
   "Items" :>
-    Get '[JSON] [Entity PurchaseOrderItem] :<|>
-    ReqBody '[JSON] PurchaseOrderItem :> Post '[JSON] PurchaseOrderItemId :<|>
-    Capture "poiid" PurchaseOrderItemId :> (
-      Get '[JSON] (Entity PurchaseOrderItem) :<|>
-      ReqBody '[JSON] PurchaseOrderItem :> PutNoContent '[JSON] () :<|>
-      PurchaseOrdeItemLocationAPI
-    )
+    CRUD "poiid" PurchaseOrderItem PurchaseOrdeItemLocationAPI
 
 type PurchaseOrdeItemLocationAPI =
   "Locations" :>
-    Get '[JSON] [Entity PurchaseOrderItemLocation]
+    List PurchaseOrderItemLocation
 
   
 type ProductAPI =
   "Products" :> (
-    Get '[JSON] [Entity Product]
+    List Product
   )
 
- 
+
+type CRUD name a api =
+  List a :<|>
+  Add a :<|>
+  With name a api
+
+type List a = Get '[JSON] [Entity a]
+
+type ListNav a = Get '[JSON] [a]
+
+type Find a = Get '[JSON] (Entity a)
+
+type Add a = ReqBody '[JSON] a :> Post '[JSON] (Key a)
+
+type Update a = ReqBody '[JSON] a :> PutNoContent '[JSON] ()
+
+type With name a api =
+  Capture name (Key a) :> (
+    Find a :<|>
+    Update a :<|>
+    api
+  )
+
+
 serverT :: ServerApp API
 serverT =
   purchaseOrders :<|>
@@ -66,7 +79,6 @@ serverT =
 purchaseOrders :: ServerApp PurchaseOrderAPI
 purchaseOrders =
   getPurchaseOrders :<|>
-  getPurchaseOrdersAndItems :<|>
   postPurchaseOrder :<|>
   withPurchaseOrder
   where
