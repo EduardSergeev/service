@@ -21,63 +21,79 @@ import Servant
 
 type App = ReaderT ConnectionPool Handler
 
+type ServerApp api = ServerT api App
+
 type API =
-  "api" :> (
-    "PurchaseOrders" :> (
-      Get '[JSON] [Entity PurchaseOrder] :<|>
-      "Items" :> Get '[JSON] [PurchaseOrderNav] :<|>
-      ReqBody '[JSON] PurchaseOrder :> Post '[JSON] PurchaseOrderId :<|>
-      Capture "poid" PurchaseOrderId :> (
-        Get '[JSON] (Entity PurchaseOrder) :<|>
-        ReqBody '[JSON] PurchaseOrder :> PutNoContent '[JSON] () :<|>
-        "Items" :> (
-          Get '[JSON] [Entity PurchaseOrderItem] :<|>
-          ReqBody '[JSON] PurchaseOrderItem :> Post '[JSON] PurchaseOrderItemId :<|>
-          Capture "poiid" PurchaseOrderItemId :> (
-            Get '[JSON] (Entity PurchaseOrderItem) :<|>
-            ReqBody '[JSON] PurchaseOrderItem :> PutNoContent '[JSON] () :<|>
-            "Locations" :> (
-              Get '[JSON] [Entity PurchaseOrderItemLocation]
-            )
-          )
-        )
-      )
-    ) :<|>
-    "Products" :> (
-      Get '[JSON] [Entity Product]
+  "api" :> PurchaseOrderAPI :<|> ProductAPI
+
+type PurchaseOrderAPI = 
+  "PurchaseOrders" :>
+    Get '[JSON] [Entity PurchaseOrder] :<|>
+    "Items" :> Get '[JSON] [PurchaseOrderNav] :<|>
+    ReqBody '[JSON] PurchaseOrder :> Post '[JSON] PurchaseOrderId :<|>
+    Capture "poid" PurchaseOrderId :> (
+      Get '[JSON] (Entity PurchaseOrder) :<|>
+      ReqBody '[JSON] PurchaseOrder :> PutNoContent '[JSON] () :<|>
+      PurchaseOrdeItemAPI
     )
+  
+type PurchaseOrdeItemAPI =
+  "Items" :>
+    Get '[JSON] [Entity PurchaseOrderItem] :<|>
+    ReqBody '[JSON] PurchaseOrderItem :> Post '[JSON] PurchaseOrderItemId :<|>
+    Capture "poiid" PurchaseOrderItemId :> (
+      Get '[JSON] (Entity PurchaseOrderItem) :<|>
+      ReqBody '[JSON] PurchaseOrderItem :> PutNoContent '[JSON] () :<|>
+      PurchaseOrdeItemLocationAPI
+    )
+
+type PurchaseOrdeItemLocationAPI =
+  "Locations" :>
+    Get '[JSON] [Entity PurchaseOrderItemLocation]
+
+  
+type ProductAPI =
+  "Products" :> (
+    Get '[JSON] [Entity Product]
   )
 
-serverT :: ServerT API App
+ 
+serverT :: ServerApp API
 serverT =
   purchaseOrders :<|>
   products
+
+purchaseOrders :: ServerApp PurchaseOrderAPI
+purchaseOrders =
+  getPurchaseOrders :<|>
+  getPurchaseOrdersAndItems :<|>
+  postPurchaseOrder :<|>
+  withPurchaseOrder
   where
-    purchaseOrders =
-      getPurchaseOrders :<|>
-      getPurchaseOrdersAndItems :<|>
-      postPurchaseOrder :<|>
-      withPurchaseOrder
-      where
-        withPurchaseOrder poid =
-          getPurchaseOrder poid :<|>
-          putPurchaseOrder poid :<|>
-          purchaseOrderItems
-          where
-            purchaseOrderItems =
-              getPurchaseOrderItems poid :<|>
-              postPurchaseOrderItem poid :<|>
-              withPurchaseOrderItem
-              where
-                withPurchaseOrderItem poiid =
-                  getPurchaseOrderItem poiid :<|>
-                  putPurchaseOrderItem poiid :<|>
-                  purchaseOrderItemLocations
-                  where
-                    purchaseOrderItemLocations =
-                      getPurchaseOrderItemLocations poiid
-    products =
-      getProducts
+    withPurchaseOrder poid =
+      getPurchaseOrder poid :<|>
+      putPurchaseOrder poid :<|>
+      purchaseOrderItems poid
+
+purchaseOrderItems :: PurchaseOrderId -> ServerApp PurchaseOrdeItemAPI
+purchaseOrderItems poid =
+  getPurchaseOrderItems poid :<|>
+  postPurchaseOrderItem poid :<|>
+  withPurchaseOrderItem
+  where
+    withPurchaseOrderItem poiid =
+      getPurchaseOrderItem poiid :<|>
+      putPurchaseOrderItem poiid :<|>
+      purchaseOrderItemLocations poiid
+
+purchaseOrderItemLocations :: PurchaseOrderItemId -> ServerApp PurchaseOrdeItemLocationAPI
+purchaseOrderItemLocations poiid =
+  getPurchaseOrderItemLocations poiid
+
+
+products :: ServerT ProductAPI App
+products =
+  getProducts
 
 
 getPurchaseOrders :: App [Entity PurchaseOrder]

@@ -51,7 +51,7 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistUpperCase|
 
 data PurchaseOrderNav = PurchaseOrderNav {
     purchaseOrder :: Entity PurchaseOrder
-  , purchaseOrderItems :: [Entity PurchaseOrderItem]
+  , purchaseOrderItems' :: [Entity PurchaseOrderItem]
   } deriving Generic
 
 instance ToJSON PurchaseOrderNav where
