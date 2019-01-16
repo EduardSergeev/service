@@ -13,7 +13,7 @@ import Control.Monad ((<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Reader (ReaderT(..))
-import Database.Persist.Postgresql (ConnectionPool, withPostgresqlPool)
+import Database.Persist.Postgresql (ConnectionPool, ConnectionString, withPostgresqlPool)
 import Database.Persist.Types (Entity)
 import Db
 import Network.Wai.Handler.Warp (run)
@@ -25,9 +25,10 @@ type ServerApp api = ServerT api App
 
 
 type API =
-  "api" :>
+  "api" :> (
     PurchaseOrderAPI :<|>
     ProductAPI
+  )
 
 type PurchaseOrderAPI = 
   "PurchaseOrders" :>
@@ -38,10 +39,11 @@ type PurchaseOrdeItemAPI =
     CRUD "poiid" PurchaseOrderItem PurchaseOrdeItemLocationAPI
 
 type PurchaseOrdeItemLocationAPI =
-  "Locations" :>
-    List PurchaseOrderItemLocation
+  "Locations" :> (
+    List PurchaseOrderItemLocation :<|>
+    Add PurchaseOrderItemLocation
+  )
 
-  
 type ProductAPI =
   "Products" :> (
     List Product
@@ -54,8 +56,6 @@ type CRUD name a api =
   With name a api
 
 type List a = Get '[JSON] [Entity a]
-
-type ListNav a = Get '[JSON] [a]
 
 type Find a = Get '[JSON] (Entity a)
 
@@ -100,7 +100,8 @@ purchaseOrderItems poid =
 
 purchaseOrderItemLocations :: PurchaseOrderItemId -> ServerApp PurchaseOrdeItemLocationAPI
 purchaseOrderItemLocations poiid =
-  getPurchaseOrderItemLocations poiid
+  getPurchaseOrderItemLocations poiid :<|>
+  postPurchaseOrderItemLocation poiid
 
 
 products :: ServerT ProductAPI App
@@ -110,11 +111,7 @@ products =
 
 getPurchaseOrders :: App [Entity PurchaseOrder]
 getPurchaseOrders =
-  runDb $ selectPurchaseOrders
-
-getPurchaseOrdersAndItems :: App [PurchaseOrderNav]
-getPurchaseOrdersAndItems =
-  runDb $ selectPurchaseOrdersAndItems
+  runDb $ selectPurchaseOrdersAndItems4
 
 getPurchaseOrder :: PurchaseOrderId -> App (Entity PurchaseOrder)
 getPurchaseOrder =
@@ -149,6 +146,10 @@ getPurchaseOrderItemLocations :: PurchaseOrderItemId -> App [Entity PurchaseOrde
 getPurchaseOrderItemLocations =
   runDb . selectPurchaseOrderItemLocations
 
+postPurchaseOrderItemLocation :: PurchaseOrderItemId -> PurchaseOrderItemLocation -> App PurchaseOrderItemLocationId
+postPurchaseOrderItemLocation poiid =
+  runDb . addPurchaseOrderItemLocation poiid
+
 
 getProducts :: App [Entity Product]
 getProducts =
@@ -163,6 +164,9 @@ server pool = hoistServer api (flip runReaderT pool) serverT
 
 app :: ConnectionPool -> Application
 app pool = serve api $ server pool
+
+connStr :: ConnectionString
+connStr = "host=localhost dbname=orders user=postgres port=5432"
 
 startApp :: IO ()
 startApp =

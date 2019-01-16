@@ -34,11 +34,20 @@ resolver: lts-12.26
 #  - wai
 packages:
 - .
+# - D:\work\Haskell\persistent\persistent-template
+- location:
+   git: git@github.com:EduardSergeev/persistent.git
+   commit: ff16cba21cbe18fa1cae483c796fe6b33cb51cdd
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - esqueleto-2.6.0
+- git: git@github.com:EduardSergeev/persistent.git
+  commit: ff16cba21cbe18fa1cae483c796fe6b33cb51cdd
+  subdirs:
+   - persistent-template
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

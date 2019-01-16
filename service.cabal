@@ -30,6 +30,7 @@ library
                     , monad-logger
                     , mtl
                     , unordered-containers
+                    , lens
   ghc-options:        -Wall
   default-language:   Haskell2010
 
